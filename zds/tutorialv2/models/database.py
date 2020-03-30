@@ -1362,7 +1362,7 @@ class ContentContributionRole(models.Model):
         verbose_name = 'Role de la contribution au contenu'
         verbose_name_plural = 'Roles de la contribution au contenu'
 
-    title = models.CharField(null=False, blank=False, max_length=20)
+    title = models.CharField(null=False, blank=False, max_length=80)
     subtitle = models.CharField(null=True, blank=True, max_length=200)
     position = models.IntegerField(default=0)
 
@@ -1403,6 +1403,30 @@ class ContentContribution(models.Model):
                                                                          self.user.username,
                                                                          self.contribution_role.title,
                                                                          self.pk)
+
+
+class ContentSuggestion(models.Model):
+    """
+    Content suggestion
+    """
+
+    publication = models.ForeignKey(PublishableContent,
+                                    null=False,
+                                    verbose_name='Contenu',
+                                    db_index=True,
+                                    on_delete=models.CASCADE,
+                                    related_name='publication')
+    suggestion = models.ForeignKey(PublishableContent,
+                                   null=False,
+                                   verbose_name='Suggestion',
+                                   db_index=True,
+                                   on_delete=models.CASCADE,
+                                   related_name='suggestion')
+
+    def __str__(self):
+        return "<Suggest '{0}' for content {1}, #{2}>".format(self.suggestion.title,
+                                                              self.publication.title,
+                                                              self.pk)
 
 
 @receiver(models.signals.pre_delete, sender=User)

@@ -184,7 +184,6 @@
         {% endif %}
 
     {% endif %}
-
     {{ content_pager }}
     {% include "tutorialv2/includes/alert.html" with content=content current_content_type=current_content_type %}
     {% include "tutorialv2/includes/warn_typo.part.html" with content=content %}
@@ -374,11 +373,16 @@
             </ul>
         </div>
     {% endif %}
-
+    {% if is_staff %}
+        <div class="mobile-menu-bloc mobile-all-links mobile-show-ico" data-title="Editorialisation">
+        {%  include "tutorialv2/includes/editorialization.part.html"  %}
+        </div>
+    {% endif %}
     {% include "misc/social_buttons.part.html" with link=content.get_absolute_url_online text=content.title %}
 {% endblock %}
 
 {% block content_after %}
+    {% include "tutorialv2/includes/content_suggestion.part.html" with content=content content_suggestions=content_suggestions_random %}
     <h3 class="comments-title" id="comments">
         {% if content.get_note_count > 0 %}
             <span itemprop="commentCount">

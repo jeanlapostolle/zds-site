@@ -32,11 +32,12 @@ from zds.member.views import get_client_ip
 from zds.notification import signals
 from zds.notification.models import ContentReactionAnswerSubscription, NewPublicationSubscription
 from zds.tutorialv2.forms import RevokeValidationForm, WarnTypoForm, NoteForm, NoteEditForm, UnpublicationForm, \
-    PickOpinionForm, PromoteOpinionToArticleForm, UnpickOpinionForm, ContentCompareStatsURLForm
+    PickOpinionForm, PromoteOpinionToArticleForm, UnpickOpinionForm, ContentCompareStatsURLForm, SearchSuggestionForm
 from zds.tutorialv2.mixins import SingleOnlineContentDetailViewMixin, SingleOnlineContentViewMixin, DownloadViewMixin, \
     ContentTypeMixin, SingleOnlineContentFormViewMixin, MustRedirect
 from zds.tutorialv2.models import TYPE_CHOICES_DICT, CONTENT_TYPE_LIST
-from zds.tutorialv2.models.database import PublishableContent, PublishedContent, ContentReaction, ContentContribution
+from zds.tutorialv2.models.database import PublishableContent, PublishedContent, ContentReaction, ContentContribution, \
+    ContentSuggestion
 from zds.tutorialv2.utils import search_container_or_404, last_participation_is_old, mark_read, NamedUrl
 from zds.utils.models import Alert, CommentVote, Tag, Category, CommentEdit, SubCategory, get_hat_from_request, \
     CategorySubCategory
@@ -122,6 +123,14 @@ class DisplayOnlineContent(FeatureableMixin, SingleOnlineContentDetailViewMixin)
                 self.versioned_object, initial={'version': self.versioned_object.sha_public})
             context['formConvertOpinion'] = PromoteOpinionToArticleForm(
                 self.versioned_object, initial={'version': self.versioned_object.sha_public})
+        else:
+            context['content_suggestions'] = ContentSuggestion \
+                .objects \
+                .filter(publication=self.object)
+            excluded_for_search = [str(x.suggestion.pk) for x in context['content_suggestions']]
+            excluded_for_search.append(str(self.object.pk))
+            context['formAddSuggestion'] = SearchSuggestionForm(content=self.object,
+                                                                initial={'excluded_pk': ','.join(excluded_for_search)})
 
         # pagination of comments
         make_pagination(context,
@@ -171,6 +180,10 @@ class DisplayOnlineContent(FeatureableMixin, SingleOnlineContentDetailViewMixin)
             .objects\
             .filter(content=self.object)\
             .order_by('contribution_role__position')
+        context['content_suggestions_random'] = ContentSuggestion \
+            .objects \
+            .filter(publication=self.object) \
+            .order_by('?')[:settings.ZDS_APP['content']['suggestions_per_page']]
 
         return context
 

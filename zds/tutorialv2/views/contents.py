@@ -1,14 +1,14 @@
-import time
-from collections import OrderedDict
-
 import logging
 import os
 import re
 import shutil
 import tempfile
+import time
 import zipfile
-from PIL import Image as ImagePIL
+from collections import OrderedDict
 from datetime import datetime
+
+from PIL import Image as ImagePIL
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -36,11 +36,11 @@ from zds.notification.models import TopicAnswerSubscription, NewPublicationSubsc
 from zds.tutorialv2.forms import ContentForm, JsFiddleActivationForm, AskValidationForm, AcceptValidationForm, \
     RejectValidationForm, RevokeValidationForm, WarnTypoForm, ImportContentForm, ImportNewContentForm, ContainerForm, \
     ExtractForm, BetaForm, MoveElementForm, AuthorForm, RemoveAuthorForm, CancelValidationForm, PublicationForm, \
-    UnpublicationForm, ContributionForm, RemoveContributionForm
+    UnpublicationForm, ContributionForm, RemoveContributionForm, SearchSuggestionForm, RemoveSuggestionForm
 from zds.tutorialv2.mixins import SingleContentDetailViewMixin, SingleContentFormViewMixin, SingleContentViewMixin, \
     SingleContentDownloadViewMixin, SingleContentPostMixin, FormWithPreview
 from zds.tutorialv2.models import TYPE_CHOICES_DICT
-from zds.tutorialv2.models.database import PublishableContent, Validation, ContentContribution
+from zds.tutorialv2.models.database import PublishableContent, Validation, ContentContribution, ContentSuggestion
 from zds.tutorialv2.models.versioned import Container, Extract
 from zds.tutorialv2.utils import search_container_or_404, get_target_tagged_tree, search_extract_or_404, \
     try_adopt_new_child, TooDeepContainerError, BadManifestError, get_content_from_json, init_new_repo, \
@@ -221,6 +221,13 @@ class DisplayContent(LoginRequiredMixin, SingleContentDetailViewMixin):
                 .objects\
                 .filter(content=self.object)\
                 .order_by('contribution_role__position')
+            context['content_suggestions'] = ContentSuggestion \
+                .objects \
+                .filter(publication=self.object)
+            excluded_for_search = [str(x.suggestion.pk) for x in context['content_suggestions']]
+            excluded_for_search.append(str(self.object.pk))
+            context['formAddSuggestion'] = SearchSuggestionForm(content=self.object,
+                                                                initial={'excluded_pk': ','.join(excluded_for_search)})
 
         return context
 
@@ -1452,8 +1459,16 @@ class ManageBetaContent(LoggedWithReadWriteHability, SingleContentFormViewMixin)
                                         self.object.validation_private_message,
                                         msg,
                                         hat=get_hat_from_settings('validation'))
+
+                # When the anti-spam triggers (because the author of the
+                # message posted themselves within the last 15 minutes),
+                # it is likely that we want to avoid to generate a duplicated
+                # post that couldn't be deleted. We hence avoid to add another
+                # message to the topic.
+
                 else:
                     all_tags = self._get_all_tags()
+
                     if not already_in_beta:
                         unlock_topic(topic)
                         msg_post = render_to_string(
@@ -1464,7 +1479,8 @@ class ManageBetaContent(LoggedWithReadWriteHability, SingleContentFormViewMixin)
                                 'url': settings.ZDS_APP['site']['url'] + self.versioned_object.get_absolute_url_beta()
                             }
                         )
-                    else:
+                        topic = send_post(self.request, topic, self.request.user, msg_post)
+                    elif not topic.antispam():
                         msg_post = render_to_string(
                             'tutorialv2/messages/beta_update.md',
                             {
@@ -1473,12 +1489,12 @@ class ManageBetaContent(LoggedWithReadWriteHability, SingleContentFormViewMixin)
                                 'url': settings.ZDS_APP['site']['url'] + self.versioned_object.get_absolute_url_beta()
                             }
                         )
-                    topic = send_post(self.request, topic, self.request.user, msg_post)
+                        topic = send_post(self.request, topic, self.request.user, msg_post)
 
-                    # make sure that all authors follow the topic:
-                    for author in self.object.authors.all():
-                        TopicAnswerSubscription.objects.get_or_create_active(author, topic)
-                        mark_read(topic, author)
+                # make sure that all authors follow the topic:
+                for author in self.object.authors.all():
+                    TopicAnswerSubscription.objects.get_or_create_active(author, topic)
+                    mark_read(topic, author)
 
             # finally set the tags on the topic
             if topic:
@@ -2176,3 +2192,81 @@ class RedirectOldContentOfAuthor(RedirectView):
             raise Http404('Ce type de contenu est inconnu dans le système')
 
         return reverse(route, args=[user.username])
+
+
+class AddSuggestion(LoggedWithReadWriteHability, SingleContentFormViewMixin):
+    only_draft_version = True
+    authorized_for_staff = True
+
+    def post(self, request, *args, **kwargs):
+        publication = get_object_or_404(PublishableContent, pk=kwargs['pk'])
+
+        _type = _('cet article')
+        if publication.is_tutorial:
+            _type = _('ce tutoriel')
+        elif self.object.is_opinion:
+            raise PermissionDenied
+
+        if 'options' in request.POST:
+            options = request.POST.getlist('options')
+            for option in options:
+                suggestion = get_object_or_404(PublishableContent, pk=option)
+                if ContentSuggestion.objects.filter(publication=publication, suggestion=suggestion).exists():
+                    messages.error(self.request, _(
+                        'Le contenu "{}" fait déjà partie des suggestions de {}'.format(suggestion.title, _type)))
+                elif suggestion.pk == publication.pk:
+                    messages.error(self.request, _(
+                        'Vous ne pouvez pas ajouter {} en tant que suggestion pour lui même.'.format(_type)))
+                elif suggestion.is_opinion and suggestion.sha_picked != suggestion.sha_public:
+                    messages.error(self.request, _(
+                        'Vous ne pouvez pas suggerer pour {} un billet qui n\'a pas été mis en avant.'.format(_type)))
+                elif not suggestion.sha_public:
+                    messages.error(self.request, _(
+                        'Vous ne pouvez pas suggerer pour {} un contenu qui n\'a pas été publié.'.format(_type)))
+                else:
+                    obj_suggestion = ContentSuggestion(publication=publication, suggestion=suggestion)
+                    obj_suggestion.save()
+                    messages.info(self.request, _(
+                        'Le contenu "{}" a été ajouté dans les suggestions de {}'.format(suggestion.title, _type)))
+
+        if self.object.public_version:
+            return redirect(self.object.get_absolute_url_online())
+        else:
+            return redirect(self.object.get_absolute_url())
+
+
+class RemoveSuggestion(LoggedWithReadWriteHability, SingleContentFormViewMixin):
+
+    form_class = RemoveSuggestionForm
+    only_draft_version = True
+    authorized_for_staff = True
+
+    def form_valid(self, form):
+        _type = _('cet article')
+        if self.object.is_tutorial:
+            _type = _('ce tutoriel')
+        elif self.object.is_opinion:
+            raise PermissionDenied
+
+        content_suggestion = get_object_or_404(ContentSuggestion, pk=form.cleaned_data['pk_suggestion'])
+        content_suggestion.delete()
+
+        messages.success(
+            self.request,
+            _('Vous avez enlevé "{}" de la liste des suggestions de {}.').format(content_suggestion.suggestion.title,
+                                                                                 _type))
+
+        if self.object.public_version:
+            self.success_url = self.object.get_absolute_url_online()
+        else:
+            self.success_url = self.object.get_absolute_url()
+
+        return super(RemoveSuggestion, self).form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("Les suggestions sélectionnées n'existent pas."))
+        if self.object.public_version:
+            self.success_url = self.object.get_absolute_url_online()
+        else:
+            self.success_url = self.object.get_absolute_url()
+        return super(RemoveSuggestion, self).form_valid(form)

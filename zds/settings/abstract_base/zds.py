@@ -174,6 +174,7 @@ ZDS_APP = {
         'notes_per_page': 25,
         'helps_per_page': 20,
         'commits_per_page': 20,
+        'suggestions_per_page': 2,
         'feed_length': 5,
         'user_page_number': 5,
         'default_image': join(BASE_DIR, 'fixtures', 'noir_black.png'),
@@ -198,7 +199,7 @@ ZDS_APP = {
         'beta_forum_id': zds_config.get('publications_being_written_forum_id', 1),
         'max_post_length': 1000000,
         'top_tag_max': 5,
-        'home_number': 5,
+        'home_number': 6,
         'old_post_limit_days': 90,
         # Exclude tags from top tags list. Tags listed here should not be relevant for most of users.
         # Be warned exclude too much tags can restrict performance

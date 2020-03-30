@@ -366,7 +366,7 @@ class ZMarkdownRebberLatexPublicator(Publicator):
             content_type += ', ' + self.latex_classes
         title = published_content_entity.title()
         authors = [a.username for a in published_content_entity.authors.all()]
-        smileys_directory = SMILEYS_BASE_PATH
+        smileys_directory = SMILEYS_BASE_PATH + '/svg'
 
         licence = published_content_entity.content.licence.code
         licence_short = licence.replace('CC', '').strip().lower()
@@ -413,7 +413,7 @@ class ZMarkdownRebberLatexPublicator(Publicator):
         true_latex_extension = '.'.join(self.extension.split('.')[:-1]) + '.tex'
         latex_file_path = base_name + true_latex_extension
         pdf_file_path = base_name + self.extension
-        default_logo_original_path = Path(__file__).parent / '..' / '..' / 'assets' / 'images' / 'logo.png'
+        default_logo_original_path = Path(__file__).parent / '..' / '..' / 'assets' / 'images' / 'logo@2x.png'
         with contextlib.suppress(FileExistsError):
             shutil.copy(str(default_logo_original_path), str(base_directory / 'default_logo.png'))
         with open(latex_file_path, mode='w', encoding='utf-8') as latex_file:
@@ -447,7 +447,8 @@ class ZMarkdownRebberLatexPublicator(Publicator):
         command_process = subprocess.Popen(command,
                                            shell=True, cwd=path.dirname(texfile),
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        command_process.communicate(timeout=120)
+        # let's put 10 min of timeout because we do not generate latex everyday
+        command_process.communicate(timeout=600)
 
         with contextlib.suppress(ImportError):
             from raven import breadcrumbs

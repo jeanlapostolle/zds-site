@@ -38,9 +38,9 @@ if [[ "$1" == "lint_backend" ]] && [[ "$ZDS_TEST_JOB" == *"zds.gallery"* ]]; the
     zds_fold_end
 fi
 
-# test backend
-if [[ "$1" == "test_backend" ]] && [[ "$ZDS_TEST_JOB" == *"zds."* ]]; then
-    zds_fold_start "test_backend" "* Run test for backend"
+# make migrations
+if [[ "$1" == "make_migrations" ]] && [[ "$ZDS_TEST_JOB" == *"zds."* ]]; then
+    zds_fold_start "make_migrations" "* Make migrations for backend tasks"
         python manage.py makemigrations --dry-run --check; exVal=$?
 
         gateway "!! Test failed" $exVal
@@ -82,7 +82,7 @@ fi
 # print zmarkdown log
 if [[ "$1" == "print_zmarkdown_log" ]] && [[ "$ZDS_TEST_JOB" == *"zds."* ]]; then
     zds_fold_start "zmarkdown_log" "* Print zmarkdown log"
-        pm2 logs --nostream --raw --lines 1000
+        node ./zmd/node_modules/pm2/bin/pm2 logs --nostream --raw --lines 1000
     zds_fold_end
 fi
 
@@ -93,11 +93,13 @@ if [[ "$1" == "selenium_test" ]]  && [[ "$ZDS_TEST_JOB" == *"selenium"* ]]; then
 
         zds_start_zmd
 
-        xvfb-run --server-args="-screen 0 1280x720x8" python manage.py \
+        xvfb-run --server-args="-screen 0 1280x720x8" coverage run --source='.' manage.py \
             test -v=2\
             --settings zds.settings.ci_test \
             --tag=front \
             --keepdb; exVal=$?
+            
+        gateway "!! Test failed" $exVal
 
         zds_stop_zmd
 

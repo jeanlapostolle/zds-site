@@ -3,7 +3,8 @@
 # Install script for the zds-site repository
 
 
-function _nvm {
+# load nvm
+function load_nvm {
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 }
@@ -37,6 +38,10 @@ function wget_nv {
 ## end
 
 
+# zds-site root folder
+ZDSSITE_DIR=$(pwd)
+
+
 # variables
 LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
 source $LOCAL_DIR/define_variable.sh
@@ -50,10 +55,6 @@ if $(_in "--travis-output" $@); then
 fi
 
 zds_fold_category "install"
-
-
-# zds-site root folder
-ZDSSITE_DIR=$(pwd)
 
 
 # Install packages
@@ -200,13 +201,43 @@ if  ! $(_in "-virtualenv" $@) && ( $(_in "+virtualenv" $@) || $(_in "+base" $@) 
     fi
 fi
 
+# nvm node & yarn
+if  ! $(_in "-node" $@) && ( $(_in "+node" $@) || $(_in "+base" $@) || $(_in "+full" $@) ); then
+    zds_fold_start "node" "* [+node] installing nvm (v$ZDS_NVM_VERSION) & node (v$ZDS_NODE_VERSION) & yarn"
+
+    wget -qO- https://raw.githubusercontent.com/creationix/nvm/v${ZDS_NVM_VERSION}/install.sh | bash
+    if [[ $? == 0 ]]; then
+
+        # load nvm
+        load_nvm
+
+        # install node (using .nvmrc implicitly) & yarn
+        nvm install
+        npm -g add yarn
+
+        if [[ $(grep -c -i "nvm use" $ZDS_ENV/bin/activate) == "0" ]]; then # add nvm activation to venv activate's
+            ACTIVATE_NVM="nvm use > /dev/null # activate nvm (from install_zds.sh)"
+
+            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate
+            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate.csh
+            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate.fish
+        fi
+    else
+        print_error "!! Cannot obtain nvm v${ZDS_NVM_VERSION}"
+        exit 1
+    fi
+
+    zds_fold_end
+fi
+
+# virtualenv activation
 if ! $(_in "--force-skip-activating" $@) && [[ ( $VIRTUAL_ENV == "" || $(realpath $VIRTUAL_ENV) != $(realpath $ZDS_VENV) ) ]]; then
     zds_fold_start "virtualenv" "* Load virtualenv"
 
     print_info "* activating venv \`$ZDS_VENV\`"
 
-    if [ -d $HOME/.nvm ]; then # force nvm activation, in case of
-        _nvm
+    if [ -d $HOME/.nvm ]; then # load nvm, in case of
+        load_nvm
     fi
 
     if [ ! -f $ZDS_VENV/bin/activate ]; then
@@ -240,37 +271,6 @@ fi
 
 export ZDS_ENV=$(realpath $ZDS_VENV)
 
-# nvm node & yarn
-if  ! $(_in "-node" $@) && ( $(_in "+node" $@) || $(_in "+base" $@) || $(_in "+full" $@) ); then
-    zds_fold_start "node" "* [+node] installing nvm (v$ZDS_NVM_VERSION) & node (v$ZDS_NODE_VERSION) & yarn"
-
-    wget -qO- https://raw.githubusercontent.com/creationix/nvm/v${ZDS_NVM_VERSION}/install.sh | bash
-    if [[ $? == 0 ]]; then
-
-        _nvm
-
-        # install node & yarn
-        nvm install ${ZDS_NODE_VERSION}
-        echo ${ZDS_NODE_VERSION} > .nvmrc
-        nvm use
-
-        npm -g add yarn
-
-        if [[ $(grep -c -i "nvm use" $ZDS_ENV/bin/activate) == "0" ]]; then # add nvm activation to venv activate's
-            ACTIVATE_NVM="nvm use > /dev/null # activate nvm (from install_zds.sh)"
-
-            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate
-            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate.csh
-            echo $ACTIVATE_NVM >> $ZDS_ENV/bin/activate.fish
-        fi
-    else
-        print_error "!! Cannot obtain nvm v${ZDS_NVM_VERSION}"
-        exit 1
-    fi
-
-    zds_fold_end
-fi
-
 
 # local jdk 
 if  ! $(_in "-jdk-local" $@) && ( $(_in "+jdk-local" $@) || $(_in "+full" $@) ); then
@@ -279,8 +279,10 @@ if  ! $(_in "-jdk-local" $@) && ( $(_in "+jdk-local" $@) || $(_in "+full" $@) );
     mkdir -p $ZDS_VENV/lib/
     cd $ZDS_VENV/lib/
 
-    if [ -d jdk ]; then # remove previous install
-        rm -rf jdk
+    jdk_path=$(realpath jdk)
+
+    if [ -d "$jdk_path" ]; then # remove previous install
+        rm -rf "$jdk_path"
     fi
 
     baseURL="https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/download/"
@@ -293,13 +295,21 @@ if  ! $(_in "-jdk-local" $@) && ( $(_in "+jdk-local" $@) || $(_in "+full" $@) );
 
     if [[ $? == 0 ]]; then
         rm ${foldername}.tar.gz
-        mv ${foldername} jdk
+        mv ${foldername} "$jdk_path"
 
-        echo $(./jdk/bin/java --version)
+        echo $($jdk_path/bin/java -version)
 
-        export PATH="$PATH:$(pwd)/jdk/bin"
-        export JAVA_HOME="$(pwd)/jdk"
+        export PATH="$PATH:$jdk_path/bin"
+        export JAVA_HOME="$jdk_path"
         export ES_JAVA_OPTS="-Xms512m -Xmx512m"
+
+        if [[ $(grep -c -i "export JAVA_HOME" $ZDS_ENV/bin/activate) == "0" ]]; then # add java to venv activate's
+            ACTIVATE_JAVA="export PATH=\"$PATH:$jdk_path/bin\"\nexport JAVA_HOME=\"$jdk_path\"\nexport ES_JAVA_OPTS=\"-Xms512m -Xmx512m\""
+
+            echo -e $ACTIVATE_JAVA >> $ZDS_ENV/bin/activate
+            echo -e $ACTIVATE_JAVA >> $ZDS_ENV/bin/activate.csh
+            echo -e $ACTIVATE_JAVA >> $ZDS_ENV/bin/activate.fish
+        fi
     else
         print_error "!! Cannot get or extract jdk ${ZDS_JDK_VERSION}"
         exit 1
@@ -317,8 +327,10 @@ if  ! $(_in "-elastic-local" $@) && ( $(_in "+elastic-local" $@) || $(_in "+full
     mkdir -p .local
     cd .local
 
-    if [ -d elasticsearch ]; then # remove previous install
-        rm -r elasticsearch
+    es_path=$(realpath elasticsearch)
+
+    if [ -d "$es_path" ]; then # remove previous install
+        rm -r "$es_path"
     fi
 
     wget_nv https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-${ZDS_ELASTIC_VERSION}.zip
@@ -328,12 +340,12 @@ if  ! $(_in "-elastic-local" $@) && ( $(_in "+elastic-local" $@) || $(_in "+full
         mv elasticsearch-${ZDS_ELASTIC_VERSION} elasticsearch
 
         # add options to reduce memory consumption
-        print_info "#Options added by install_zds.sh" >> elasticsearch/config/jvm.options
-        print_info "-Xms512m" >> elasticsearch/config/jvm.options
-        print_info "-Xmx512m" >> elasticsearch/config/jvm.options
+        print_info "#Options added by install_zds.sh" >> "$es_path/config/jvm.options"
+        print_info "-Xms512m" >> "$es_path/config/jvm.options"
+        print_info "-Xmx512m" >> "$es_path/config/jvm.options"
 
         # symbolic link to elastic start script
-        ln -s elasticsearch/bin/elasticsearch $ZDS_ENV/bin/
+        ln -s "$es_path/bin/elasticsearch" $ZDS_ENV/bin/
     else
         print_error "!! Cannot get elasticsearch ${ZDS_ELASTIC_VERSION}"
         exit 1
@@ -353,8 +365,7 @@ if  ! $(_in "-tex-local" $@) && ( $(_in "+tex-local" $@) || $(_in "+full" $@) );
     LOCAL=$ZDSSITE_DIR/.local
 
     # clone
-    BASE_TEXLIVE=$LOCAL/texlive
-    BASE_REPO=$BASE_TEXLIVE
+    BASE_REPO=$LOCAL/texlive
     REPO=$BASE_REPO/latex-template
 
     mkdir -p $BASE_REPO
@@ -367,7 +378,7 @@ if  ! $(_in "-tex-local" $@) && ( $(_in "+tex-local" $@) || $(_in "+full" $@) );
     git clone $ZDS_LATEX_REPO
     if [[ $? == 0 ]]; then
         # copy scripts
-        cd $BASE_TEXLIVE
+        cd $BASE_REPO
         cp $REPO/scripts/texlive.profile $REPO/scripts/packages $REPO/scripts/install_font.sh .
 
         # install fonts
@@ -384,13 +395,18 @@ if  ! $(_in "-tex-local" $@) && ( $(_in "+tex-local" $@) || $(_in "+full" $@) );
                 ./install-tl*/install-tl -profile texlive.profile
 
                 # Symlink the binaries to bin of venv
-                for i in $BASE_TEXLIVE/bin/x86_64-linux/*; do
+                for i in $BASE_REPO/bin/x86_64-linux/*; do
                   ln -sf $i $ZDS_ENV/bin/
                 done
             fi
 
             ./bin/x86_64-linux/tlmgr install $(cat packages)  # extra packages
             ./bin/x86_64-linux/tlmgr update --self
+
+            # Install tabu-fixed packages
+            mkdir -p $BASE_REPO/texmf-local/tex/latex/tabu
+            wget -P $BASE_REPO/texmf-local/tex/latex/tabu https://raw.githubusercontent.com/tabu-issues-for-future-maintainer/tabu/master/tabu.sty
+
             rm -rf $REPO
         else
             print_error "!! Cannot download texlive"
@@ -546,7 +562,7 @@ if  ! $(_in "-data" $@) && ( $(_in "+data" $@) || $(_in "+base" $@) || $(_in "+f
 
     if [[ $exVal != 0 ]]; then
         print_error "!! Cannot generate-fixtures (use \`-data\` to skip)"
-        exit 1
+        # don't exit here, because we have to stop zmd !
     fi
 
     make zmd-stop; exVal=$?
