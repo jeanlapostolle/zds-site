@@ -224,18 +224,9 @@ class ProfileForm(MiniProfileForm):
     """
     Updates main profile rules:
     - Display email address to everybody
-    - Display signatures
-    - Display menus on hover
-    - Receive an email when receiving a personal message
     """
 
     multi_choices = [
-        ("show_sign", _("Afficher les signatures")),
-        ("is_hover_enabled", _("Dérouler les menus au survol")),
-        ("allow_temp_visual_changes", _("Activer les changements visuels temporaires")),
-        ("show_markdown_help", _("Afficher l'aide Markdown dans l'éditeur")),
-        ("email_for_answer", _("Recevoir un courriel lors d'une réponse à un message privé")),
-        ("email_for_new_mp", _("Recevoir un courriel lors de la réception d'un nouveau message privé")),
         (
             "hide_forum_activity",
             _(
@@ -250,22 +241,6 @@ class ProfileForm(MiniProfileForm):
         required=False,
         choices=tuple(multi_choices),
         widget=forms.CheckboxSelectMultiple,
-    )
-
-    licence = forms.ModelChoiceField(
-        label=(
-            _(
-                "Licence préférée pour vos publications "
-                '(<a href="{0}" alt="{1}">En savoir plus sur les licences et {2}</a>).'
-            ).format(
-                settings.ZDS_APP["site"]["licenses"]["licence_info_title"],
-                settings.ZDS_APP["site"]["licenses"]["licence_info_link"],
-                settings.ZDS_APP["site"]["literal_name"],
-            )
-        ),
-        queryset=Licence.objects.order_by("title").all(),
-        required=False,
-        empty_label=_("Choisir une licence"),
     )
 
     def __init__(self, *args, **kwargs):
@@ -315,6 +290,72 @@ class ProfileForm(MiniProfileForm):
             ),
         )
         self.helper.layout = layout
+
+
+class EditorForm(forms.Form):
+    multi_choices = [
+        ("show_sign", _("Afficher les signatures")),
+        ("show_markdown_help", _("Afficher l'aide Markdown dans l'éditeur")),
+    ]
+
+    licence = forms.ModelChoiceField(
+        label=(
+            _(
+                "Licence préférée pour vos publications "
+                '(<a href="{0}" alt="{1}">En savoir plus sur les licences et {2}</a>).'
+            ).format(
+                settings.ZDS_APP["site"]["licenses"]["licence_info_title"],
+                settings.ZDS_APP["site"]["licenses"]["licence_info_link"],
+                settings.ZDS_APP["site"]["literal_name"],
+            )
+        ),
+        queryset=Licence.objects.order_by("title").all(),
+        required=False,
+        empty_label=_("Choisir une licence"),
+    )
+
+    options = forms.MultipleChoiceField(
+        label="",
+        required=False,
+        choices=tuple(multi_choices),
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_class = "content-wrapper"
+        self.helper.form_method = "post"
+
+        # to get initial value form checkbox show email
+        initial = kwargs.get("initial", {})
+        self.fields["options"].initial = ""
+        for option in [m[0] for m in self.multi_choices]:
+            if option in initial and initial[option]:
+                self.fields["options"].initial += option
+
+        layout = Layout(
+            Field("licence"),
+            Field("options"),
+            ButtonHolder(
+                StrictButton(_("Enregistrer"), type="submit"),
+            ),
+        )
+        self.helper.layout = layout
+
+
+class AccesibilityForm(forms.Form):
+    multi_choices = [
+        ("is_hover_enabled", _("Dérouler les menus au survol")),
+        ("allow_temp_visual_changes", _("Activer les changements visuels temporaires")),
+    ]
+
+
+class NotificationForm(forms.Form):
+    multi_choices = [
+        ("email_for_answer", _("Recevoir un courriel lors d'une réponse à un message privé")),
+        ("email_for_new_mp", _("Recevoir un courriel lors de la réception d'un nouveau message privé")),
+    ]
 
 
 class GitHubTokenForm(forms.Form):

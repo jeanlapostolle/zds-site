@@ -19,7 +19,7 @@ from django.views.generic import DetailView, UpdateView
 from zds.forum.models import Topic, TopicRead
 from zds.gallery.forms import ImageAsAvatarForm
 from zds.member import EMAIL_EDIT
-from zds.member.forms import ChangePasswordForm, ChangeUserForm, GitHubTokenForm, KarmaForm, ProfileForm
+from zds.member.forms import ChangePasswordForm, ChangeUserForm, EditorForm, GitHubTokenForm, KarmaForm, ProfileForm
 from zds.member.models import Ban, KarmaNote, NewEmailProvider, Profile
 from zds.member.utils import get_bot_account
 from zds.notification.models import NewPublicationSubscription, TopicAnswerSubscription
@@ -210,6 +210,71 @@ class MemberDetail(DetailView):
 def redirect_old_profile_to_new(request, user_name):
     user = get_object_or_404(User, username=user_name)
     return redirect(user.profile, permanent=True)
+
+
+class UpdateEditor(UpdateView):
+    """Update the editor settings."""
+
+    form_class = EditorForm
+    template_name = "member/settings/editor.html"
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(Profile, user=self.request.user)
+
+    def get_form(self, form_class=EditorForm):
+        profile = self.get_object()
+        form = form_class(
+            initial={
+                "show_sign": profile.show_sign,
+                "show_markdown_help": profile.show_markdown_help,
+                "licence": profile.licence,
+            }
+        )
+
+        return form
+
+    def post(self, request, *args, **kwargs):
+        form = self.form_class(request.POST)
+
+        if form.is_valid():
+            return self.form_valid(form)
+
+        return render(request, self.template_name, {"form": form})
+
+    def form_valid(self, form):
+        profile = self.get_object()
+        self.update_profile(profile, form)
+        self.save_profile(profile)
+
+        response = redirect(self.get_success_url())
+        return response
+
+    def update_profile(self, profile, form):
+        cleaned_data_options = form.cleaned_data.get("options")
+        for option in [m[0] for m in self.form_class.multi_choices]:
+            profile.__setattr__(option, option in cleaned_data_options)
+
+    def get_success_url(self):
+        return reverse("update-editor")
+
+    def save_profile(self, profile):
+        try:
+            profile.save()
+            profile.user.save()
+        except Profile.DoesNotExist:
+            messages.error(self.request, self.get_error_message())
+            return redirect(reverse("update-editor"))
+        messages.success(self.request, self.get_success_message())
+
+    def get_success_message(self):
+        return _("Les paramètres de l'éditeur ont correctement été mis à jour.")
+
+    def get_error_message(self):
+        return _("Une erreur est survenue.")
 
 
 class UpdateMember(UpdateView):

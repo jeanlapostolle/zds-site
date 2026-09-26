@@ -28,6 +28,7 @@ from zds.member.views.moderation import modify_karma, modify_profile, settings_m
 from zds.member.views.password_recovery import forgot_password, new_password
 from zds.member.views.profile import (
     UpdateAvatarMember,
+    UpdateEditor,
     UpdateGitHubToken,
     UpdateMember,
     UpdatePasswordMember,
@@ -53,6 +54,7 @@ urlpatterns = [
     path("voir/<str:user_name>/", redirect_old_profile_to_new, name="member-detail-redirect"),
     # modification
     path("parametres/profil/", UpdateMember.as_view(), name="update-member"),
+    path("parametres/editor/", UpdateEditor.as_view(), name="update-editor"),
     path("parametres/github/", UpdateGitHubToken.as_view(), name="update-github"),
     path("parametres/github/supprimer/", remove_github_token, name="remove-github"),
     path("parametres/profil/maj_avatar/", UpdateAvatarMember.as_view(), name="update-avatar-member"),

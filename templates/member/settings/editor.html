@@ -1,0 +1,30 @@
+{% extends "member/settings/base.html" %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+
+{% block title %}
+    {% trans "Paramètres de l'éditeur" %}
+{% endblock %}
+
+
+
+{% block breadcrumb %}
+    <li>
+    {% trans "Paramètres de l'éditeur" %}
+    </li>
+{% endblock %}
+
+
+
+{% block headline %}
+    {% trans "Paramètres de l'éditeur" %}
+{% endblock %}
+
+
+
+{% block content %}
+    <div class="content-wrapper">
+        {% crispy form %}
+    </div>
+{% endblock %}
