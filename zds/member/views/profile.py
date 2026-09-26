@@ -19,7 +19,15 @@ from django.views.generic import DetailView, UpdateView
 from zds.forum.models import Topic, TopicRead
 from zds.gallery.forms import ImageAsAvatarForm
 from zds.member import EMAIL_EDIT
-from zds.member.forms import ChangePasswordForm, ChangeUserForm, EditorForm, GitHubTokenForm, KarmaForm, ProfileForm
+from zds.member.forms import (
+    AccesibilityForm,
+    ChangePasswordForm,
+    ChangeUserForm,
+    EditorForm,
+    GitHubTokenForm,
+    KarmaForm,
+    ProfileForm,
+)
 from zds.member.models import Ban, KarmaNote, NewEmailProvider, Profile
 from zds.member.utils import get_bot_account
 from zds.notification.models import NewPublicationSubscription, TopicAnswerSubscription
@@ -487,6 +495,42 @@ class UpdateEditor(UpdateMember):
 
     def get_success_message(self):
         return _("Les paramètres de l'éditeur ont correctement été mis à jour.")
+
+    def get_error_message(self):
+        return _("Une erreur est survenue.")
+
+
+class UpdateAccessibility(UpdateMember):
+    """Update the accessibility settings."""
+
+    form_class = AccesibilityForm
+    template_name = "member/settings/accessibility.html"
+
+    def get_form(self, form_class=AccesibilityForm):
+        profile = self.get_object()
+        form = form_class(
+            initial={
+                "is_hover_enabled": profile.is_hover_enabled,
+                "allow_temp_visual_changes": profile.allow_temp_visual_changes,
+            }
+        )
+
+        return form
+
+    def get_success_url(self):
+        return reverse("update-accessibility")
+
+    def save_profile(self, profile):
+        try:
+            profile.save()
+            profile.user.save()
+        except Profile.DoesNotExist:
+            messages.error(self.request, self.get_error_message())
+            return redirect(reverse("update-accessibility"))
+        messages.success(self.request, self.get_success_message())
+
+    def get_success_message(self):
+        return _("Les paramètres d'accessibilité ont correctement été mis à jour.")
 
     def get_error_message(self):
         return _("Une erreur est survenue.")

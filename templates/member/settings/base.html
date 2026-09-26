@@ -36,6 +36,7 @@
                 <li><a href="{% url "update-member" %}">{% trans "Modification de mon profil" %}</a></li>
                 <li><a href="{% url "update-password-member" %}">{% trans "Mot de passe" %}</a></li>
                 <li><a href="{% url "update-editor" %}">{% trans "Paramètres de l'éditeur" %}</a></li>
+                <li><a href="{% url "update-accessibility" %}">{% trans "Paramètres d'accessibilité" %}</a></li>
                 <li><a href="{% url "update-username-email-member" %}">{% trans "Pseudo et courriel" %}</a></li>
                 <li><a href="{% url "hats-settings" %}">{% trans "Casquettes" %}</a></li>
                 {% if user.profile.is_dev %}

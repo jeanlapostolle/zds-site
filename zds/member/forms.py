@@ -350,6 +350,34 @@ class AccesibilityForm(forms.Form):
         ("allow_temp_visual_changes", _("Activer les changements visuels temporaires")),
     ]
 
+    options = forms.MultipleChoiceField(
+        label="",
+        required=False,
+        choices=tuple(multi_choices),
+        widget=forms.CheckboxSelectMultiple,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_class = "content-wrapper"
+        self.helper.form_method = "post"
+
+        # to get initial value form checkbox show email
+        initial = kwargs.get("initial", {})
+        self.fields["options"].initial = ""
+        for option in [m[0] for m in self.multi_choices]:
+            if option in initial and initial[option]:
+                self.fields["options"].initial += option
+
+        layout = Layout(
+            Field("options"),
+            ButtonHolder(
+                StrictButton(_("Enregistrer"), type="submit"),
+            ),
+        )
+        self.helper.layout = layout
+
 
 class NotificationForm(forms.Form):
     multi_choices = [
