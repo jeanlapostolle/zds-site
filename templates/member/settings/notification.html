@@ -1,0 +1,30 @@
+{% extends "member/settings/base.html" %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+
+{% block title %}
+    {% trans "Paramètres de notification" %}
+{% endblock %}
+
+
+
+{% block breadcrumb %}
+    <li>
+    {% trans "Paramètres de notification" %}
+    </li>
+{% endblock %}
+
+
+
+{% block headline %}
+    {% trans "Paramètres de notification" %}
+{% endblock %}
+
+
+
+{% block content %}
+    <div class="content-wrapper">
+        {% crispy form %}
+    </div>
+{% endblock %}

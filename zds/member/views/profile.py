@@ -26,6 +26,7 @@ from zds.member.forms import (
     EditorForm,
     GitHubTokenForm,
     KarmaForm,
+    NotificationForm,
     ProfileForm,
 )
 from zds.member.models import Ban, KarmaNote, NewEmailProvider, Profile
@@ -531,6 +532,42 @@ class UpdateAccessibility(UpdateMember):
 
     def get_success_message(self):
         return _("Les paramètres d'accessibilité ont correctement été mis à jour.")
+
+    def get_error_message(self):
+        return _("Une erreur est survenue.")
+
+
+class UpdateNotification(UpdateMember):
+    """Update the notification settings."""
+
+    form_class = NotificationForm
+    template_name = "member/settings/notification.html"
+
+    def get_form(self, form_class=NotificationForm):
+        profile = self.get_object()
+        form = form_class(
+            initial={
+                "email_for_answer": profile.email_for_answer,
+                "email_for_new_mp": profile.email_for_new_mp,
+            }
+        )
+
+        return form
+
+    def get_success_url(self):
+        return reverse("update-notification")
+
+    def save_profile(self, profile):
+        try:
+            profile.save()
+            profile.user.save()
+        except Profile.DoesNotExist:
+            messages.error(self.request, self.get_error_message())
+            return redirect(reverse("update-notification"))
+        messages.success(self.request, self.get_success_message())
+
+    def get_success_message(self):
+        return _("Les paramètres de notifications ont correctement été mis à jour.")
 
     def get_error_message(self):
         return _("Une erreur est survenue.")
